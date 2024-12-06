@@ -11,7 +11,7 @@ Textual modality is automatically generated for each unlabeled video by a video-
 Multimodal adaptive clustering for episodic sampling (MACES) based on a video-text ensemble distance metric is proposed to accurately estimate pseudo-classes, which constructs high-quality few-shot tasks (episodes) for episodic training. 
 Vision-language meta-adaptation (VLMA) is designed for adapting the pre-trained model to novel tasks by category-aware vision-language contrastive learning and confidence-based reliable bidirectional knowledge distillation. 
 The final prediction is obtained by multimodal adaptive inference. 
-Extensive experiments on four benchmarks demonstrate the superiority of our method for unsupervised few-shot action recognition. 
+Extensive experiments on five benchmarks demonstrate the superiority of our method for unsupervised few-shot action recognition. 
 
 ![overview](assets/overview.png)
 
