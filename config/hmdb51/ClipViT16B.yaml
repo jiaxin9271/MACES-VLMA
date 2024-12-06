@@ -1,0 +1,46 @@
+# env
+seed: 42
+dataset: k100   # hmdb51 ucf101 k100 
+amp: True
+
+# method
+train_mode: Cluster   # Sup Cluster
+video_encoder: ClipViT16B   # ClipRN50 ClipViT16B
+text_encoder: TextViT16B   # TextRN50 TextViT16B
+use_video_encoder: True
+use_text_encoder: False
+use_video_cache: True
+use_text_cache: False
+use_video_adapter: False
+use_text_adapter: False
+alpha: 1
+beta: 1
+vtc_tau: 0.07
+vtc_lambda: 1
+kl_tau: 1
+kl_lambda: 1
+frames: 8
+video_size: 224
+cluster_type: clip # text video clip
+prompt_type: git
+
+# train
+train_aug: aug1
+lr: 0.0001
+total_epoch: 10
+batch_size: 16
+num_tasks: 128
+way: 5
+shot: 1
+query: 1
+num_train_tasks: 40
+
+# val & eval
+eval_all: True
+eval_way: 5
+eval_shot: 1
+eval_query: 1
+val_epoch: 1
+num_val_tasks: 600
+num_eval_tasks: 10000
+eval_checkpoint: null # null best.pth
