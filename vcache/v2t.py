@@ -16,9 +16,9 @@ class V2TDataset(Dataset):
         self.prompt_type = prompt_type
         self.split_path = os.path.join(data_path, self.split)
         self.video_tf = select_transform(aug, video_size)
-        self.videos_list = []  # 每个视频的地址
-        self.videos_frames_list = []  # 每个视频帧的地址 
-        self.videos_labels_list = []  # 每个视频的标签
+        self.videos_list = []  
+        self.videos_frames_list = []  
+        self.videos_labels_list = []  
         self.get_sup_data()
 
     def get_sup_data(self):
@@ -81,7 +81,7 @@ def generate_prompt_git(dataset='hmdb51', split='train', frames=6, batch_size=1)
         num_workers=8,
         pin_memory=True,
         drop_last=False,
-        shuffle=False  # 顺序不能乱
+        shuffle=False  
     )
     
     from transformers import AutoProcessor, AutoModelForCausalLM
@@ -123,7 +123,7 @@ def generate_prompt_blip(dataset='hmdb51', split='train'):
         num_workers=8,
         pin_memory=True,
         drop_last=False,
-        shuffle=False  # 顺序不能乱
+        shuffle=False 
     )
     
     from transformers import BlipProcessor, BlipForConditionalGeneration
@@ -140,7 +140,6 @@ def generate_prompt_blip(dataset='hmdb51', split='train'):
     
     pbar = tqdm(total=len(video_loader), unit='bs')
     for data, label in video_loader:
-        # inputs = processor(raw_image, "a photography of", return_tensors="pt").to("cuda")
         inputs = processor(Image.open(data[0]).convert('RGB'), return_tensors="pt").to("cuda")
         generated_ids = model.generate(**inputs, max_new_tokens=30)
         res = processor.decode(generated_ids[0], skip_special_tokens=True)
@@ -166,7 +165,7 @@ def generate_prompt_gpt2(dataset='hmdb51', split='train'):
         num_workers=8,
         pin_memory=True,
         drop_last=False,
-        shuffle=False  # 顺序不能乱
+        shuffle=False 
     )
     
     from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
@@ -215,7 +214,7 @@ def generate_prompt_blip2(dataset='hmdb51', split='train'):
         num_workers=8,
         pin_memory=True,
         drop_last=False,
-        shuffle=False  # 顺序不能乱
+        shuffle=False 
     )
     
     from transformers import Blip2Processor, Blip2ForConditionalGeneration
@@ -232,7 +231,6 @@ def generate_prompt_blip2(dataset='hmdb51', split='train'):
     
     pbar = tqdm(total=len(video_loader), unit='bs')
     for data, label in video_loader:
-        # inputs = processor(raw_image, "a photography of", return_tensors="pt").to("cuda")
         inputs = processor(Image.open(data[0]).convert('RGB'), return_tensors="pt").to("cuda")
         generated_ids = model.generate(**inputs, max_new_tokens=30)
         res = processor.decode(generated_ids[0], skip_special_tokens=True)

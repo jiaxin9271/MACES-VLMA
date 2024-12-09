@@ -30,10 +30,10 @@ class TestVideoDataset(Dataset):
             self.get_prompt()
 
         # data
-        self.videos_list = []  # 每个视频的地址
-        self.videos_frames_list = []  # 每个视频帧的地址 
-        self.videos_labels_list = []  # 每个视频的标签
-        self.videos_labels = []  # 真实标签
+        self.videos_list = []  
+        self.videos_frames_list = []  
+        self.videos_labels_list = [] 
+        self.videos_labels = [] 
         self.get_sup_data()
 
     def get_prompt(self):
@@ -109,7 +109,6 @@ def extract_feature_for_test_stage(args, model, logger, verbose=True):
     os.makedirs('/home/cjx/ufsar/cache/crash', exist_ok=True)
     model.eval()
 
-    # 1. 准备数据
     if verbose:
         logger.log('extract feature for test stage', prefix='Feature')
     test_dataset = TestVideoDataset(
@@ -130,7 +129,6 @@ def extract_feature_for_test_stage(args, model, logger, verbose=True):
         shuffle=False  # 顺序不能乱
     )
     
-    # 2. 提取特征
     video_features = []
     text_features = []
     with torch.no_grad():
@@ -144,7 +142,6 @@ def extract_feature_for_test_stage(args, model, logger, verbose=True):
             pbar.update()
         pbar.close()
 
-    # 3. 特征保存
     if args.use_video_encoder:
         video_features = torch.cat(video_features)
         if verbose:

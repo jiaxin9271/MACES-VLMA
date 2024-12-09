@@ -30,9 +30,9 @@ class CacheVideoDataset(Dataset):
             self.get_prompt()
 
         # data
-        self.videos_list = []  # 每个视频的地址
-        self.videos_frames_list = []  # 每个视频帧的地址 
-        self.videos_labels_list = []  # 每个视频的标签
+        self.videos_list = []  
+        self.videos_frames_list = []  
+        self.videos_labels_list = [] 
         self.get_sup_data()
 
     def get_prompt(self):
@@ -116,7 +116,6 @@ def extract_feature(
     os.makedirs(output_dir + '/logs', exist_ok=True)
     logger = Logger(output_dir, 'logs')
 
-    # 1. 选择预训练模型
     if mode == 'video':     
         logger.log(f'extract {dataset}/{split} video feature by [{video_encoder}]', prefix='Feature')
         save_name = f'{video_encoder}_{split}_{aug}_{frames}'
@@ -142,7 +141,6 @@ def extract_feature(
         model.cuda()
         model.eval()
 
-    # 2. 准备数据
     train_dataset = CacheVideoDataset(
         dataset=dataset, 
         split=split, 
@@ -165,7 +163,6 @@ def extract_feature(
     with open(output_dir + f'/videos_frames_list_{split}.json', 'w') as f:
         json.dump(train_dataset.videos_frames_list, f)
 
-    # 3. 特征提取
     features = []
     labels = []
     with torch.no_grad():
@@ -177,13 +174,6 @@ def extract_feature(
                 video_embs = model(x)
                 video_embs = video_embs.reshape(1, frames, -1)
                 features.append(video_embs)
-
-                # videomae
-                # x = video.cuda()
-                # x = x.reshape(-1, *x.shape[-4:])  # [bs x (s + q) x 8, 3, 224, 224]  
-                # video_embs = model(pixel_values=x).last_hidden_state
-                # video_embs = video_embs.mean(dim=1)
-                # features.append(video_embs)  
             elif mode == 'text':
                 text_embs = model(text)
                 features.append(text_embs)
@@ -202,7 +192,6 @@ def extract_feature(
             pbar.update()
         pbar.close()
 
-    # 4. 将特征和标签保存到本地文件
     features = torch.cat(features)
     features = features.cpu().numpy()
     np.save(output_dir + f'/{save_name}.npy', features)
@@ -214,10 +203,6 @@ def extract_feature(
 
 def get_distance(x, y, dist_method='video', eps=10e-3, frames=8):
     if dist_method == 'video':
-        # n, m = x.size(0), y.size(0)
-        # x = x.unsqueeze(1).expand(n, m, -1)
-        # y = y.unsqueeze(0).expand(n, m, -1)
-        # return torch.norm(x - y, dim=2)
         x = F.normalize(x, dim=-1)  # [n, 8, 2048]
         y = F.normalize(y, dim=-1)  # [k, 8, 2048]
         sim = torch.einsum('nid,kjd->nkij', x, y)
@@ -225,10 +210,6 @@ def get_distance(x, y, dist_method='video', eps=10e-3, frames=8):
         sim = sim / (2 * frames)
         return 1 - sim + eps
     elif dist_method == 'text':
-        # n, m = x.size(0), y.size(0)
-        # x = x.unsqueeze(1).expand(n, m, -1)
-        # y = y.unsqueeze(0).expand(n, m, -1)
-        # return torch.norm(x - y, dim=2)
         x = F.normalize(x, dim=-1)  # [n, 8, 2048]
         y = F.normalize(y, dim=-1)  # [k, 8, 2048]
         sim = torch.einsum('nd,kd->nk', x, y)
@@ -287,17 +268,13 @@ def kmeans_init(X, k, init_method='kmeans++', dist_method='mhm', frames=8):
     if init_method == 'random':
         return X[np.random.choice(n, k, replace=False)]
     elif init_method == 'kmeans++':
-        # 1. 从数据集中随机选择一个数据点作为第一个聚类中心
         centers = [X[np.random.randint(n)]]
         for i in range(1, k):
-            # 2. 对于每个数据点，计算它到最近的聚类中心的距离
             P = torch.cat(centers).reshape(i, *X.shape[1:])
             dist = get_distance(X, P, dist_method, frames=frames)  # [n, i]
             dist = dist.min(dim=-1)[0]
             dist = dist.cpu().numpy()
-            # 3. 根据权重随机选择下一个聚类中心
             prob = dist / dist.sum()
-            # prob = prob.cpu().numpy()
             centers.append(X[np.random.choice(n, p=prob)])
         return torch.cat(centers).reshape(k, *X.shape[1:])
     else:
@@ -320,21 +297,12 @@ def get_truth_info(features, labels, dist_method, frames=8):
 
 def kmeans(k, features, labels, logger, init_method, dist_method, max_iters, verbose=True, frames=8):
     cluster_labels = torch.zeros(labels.shape, dtype=torch.long).cuda(non_blocking=True)
-    
-    # 1. 初始化聚类中心
     centroids = kmeans_init(features, k, init_method, dist_method, frames=frames)
-
     sse = 0.0
     for it in range(1, max_iters + 1):
         easy_stop = True
-
-        # 2. 计算每个数据点到聚类中心的距离 
         dist = get_distance(features, centroids, dist_method, frames=frames) # [n, k]
-
-        # 3. 分配每个数据点到最近的聚类中心
         new_cluster_assignments = torch.argmin(dist, dim=-1)
-
-        # 聚类中心不发生改变可以退出聚类
         for i in range(features.shape[0]):
             if cluster_labels[i] != new_cluster_assignments[i]:
                 easy_stop = False
@@ -342,45 +310,28 @@ def kmeans(k, features, labels, logger, init_method, dist_method, max_iters, ver
         if easy_stop:
             break
         
-        # 4. 更新每个样本的聚类中心
         cluster_labels = new_cluster_assignments
-
-        # 5. 更新聚类中心为每个簇的均值
         for i in range(k):
             cluster_points = features[cluster_labels == i]
             if len(cluster_points) > 0:
                 centroids[i] = cluster_points.mean(dim=0)
-        
-        # 计算sse
+
         sse = dist.min(dim=-1)[0].sum()
-        # if verbose:
-            # logger.log(f'kmeans it[{it}], sse: {sse}', prefix='Cluster')
     
-    # 计算纯度
-    # purity = calculate_purity(labels, cluster_labels)
-    # ri, ari, f_beta = get_rand_index_and_f_measure(labels, cluster_labels, beta=1.)
-    # logger.log(f'k: {k}, purity: {purity}, ri: {ri}, ari: {ari}, f_measure: {f_beta}', prefix='Cluster')
-    
-    # sse = silhouette_score(X, labels)
     if not verbose:
         return sse
     
-    # 聚类结果
-    # logger.log(f'best_sse: {sse}', prefix='Cluster')
     for i in range(k):
         if len(cluster_labels[cluster_labels == i]) < 6:
             for j in range(features.shape[0]):
                 if cluster_labels[j] == i:
                     cluster_labels[j] = -1
     
-    # 消除离散点
     max_label = k - 1
     i = 0
     while True:
         if i == max_label:
             break
-        
-        # 标签i没有样本
         if len(cluster_labels[cluster_labels == i]) == 0:
             for j in range(features.shape[0]):
                 if cluster_labels[j] == max_label:
@@ -389,16 +340,9 @@ def kmeans(k, features, labels, logger, init_method, dist_method, max_iters, ver
         else:
             i = i + 1
 
-    # for i in range(k):
-    #     logger.log(f'{i}: {len(cluster_labels[cluster_labels == i])}', prefix='Cluster')
-    
-    # 计算纯度
     purity = calculate_purity(labels, cluster_labels)
     ri, ari, f_beta = get_rand_index_and_f_measure(labels, cluster_labels, beta=1.)
-    # logger.log(f'k: {k}, purity: {purity}, ri: {ri}, ari: {ari}, f_measure: {f_beta}', prefix='Cluster')
     logger.log(f'k: {k}, purity: {purity}, ari: {ari}, f_measure: {f_beta}', prefix='Cluster')
-
-    # 保存
     cluster_labels = cluster_labels.cpu().numpy()
     return cluster_labels
     
@@ -406,11 +350,7 @@ def kmeans(k, features, labels, logger, init_method, dist_method, max_iters, ver
 def log_means(features, labels, logger, init_method, dist_method, max_iters, low_k=None, high_k=None, frames=8):
     if low_k is None:
         low_k = 2
-        # low_k = 5
-        # low_k = 20
     if high_k is None:
-        # high_k = features.shape[0] // 6  # 每一类至少有6个
-        # high_k = 500
         high_k = min(1000, features.shape[0] // 6)
     
     low_sse = kmeans(low_k, features, labels, logger, init_method, dist_method, max_iters, False, frames=frames)
@@ -431,10 +371,10 @@ def log_means(features, labels, logger, init_method, dist_method, max_iters, low
         logger.log(f'k: {mid_k}, sse: {mid_sse}, left: {ratio_left}, right: {ratio_right}', prefix='Cluster')
         if ratio_left > ratio_right:
             high_k = mid_k
-            # high_sse = mid_sse
+            high_sse = mid_sse
         else:
             low_k = mid_k
-            # low_sse = mid_sse
+            low_sse = mid_sse
     
     mid_k = (low_k + high_k) // 2
     mid_sse = kmeans(mid_k, features, labels, logger, init_method, dist_method, max_iters, False, frames=frames)
@@ -445,10 +385,8 @@ def log_means(features, labels, logger, init_method, dist_method, max_iters, low
     ratio_right = mid_sse / high_sse
     logger.log(f'k: {mid_k}, sse: {mid_sse}, left: {ratio_left}, right: {ratio_right}', prefix='Cluster')
     if ratio_left > ratio_right:
-        # logger.log(f'bend: {mid_k}', prefix='Cluster')
         return mid_k
     else:
-        # logger.log(f'bend: {high_k}', prefix='Cluster')
         return high_k
 
 
@@ -470,11 +408,8 @@ def run_cluster(
     os.makedirs(output_dir + '/logs', exist_ok=True)
     logger = Logger(output_dir, 'logs')
 
-    # seeds
     init_seeds(42)
     
-    # 1. 提取特征
-    # logger.log(f'step1: get feature', prefix='Cluster')
     if dist_method == 'clip':
         features_cache_file = f'{video_encoder}_{text_encoder}_{split}_{aug}_{frames}_{prompt_type}'
     elif dist_method == 'video':
@@ -492,14 +427,11 @@ def run_cluster(
             prompt_type=prompt_type,
             frames=frames
         )
-    # 2. 读取文件，读取一次就够了
-    # logger.log(f'step2: check infomation', prefix='Cluster')
+
     logger.log(f'dataset: {dataset}', prefix='Cluster')
-    # logger.log(f'init: {init_method}', prefix='Cluster')
     logger.log(f'dist: {dist_method}', prefix='Cluster')
     features = np.load(f'/home/cjx/ufsar/cache/{dataset}/feature/{features_cache_file}.npy')  # [4280, 2048]
     features = torch.from_numpy(features).cuda()
-    # features = features.mean(dim=-2)
     logger.log(f'feature: {features.shape}', prefix='Cluster')
     labels = np.load(f'/home/cjx/ufsar/cache/{dataset}/feature/labels_{split}.npy')  # [4280]
     labels = torch.from_numpy(labels).cuda()
@@ -507,15 +439,6 @@ def run_cluster(
     truth_k, truth_sse = get_truth_info(features, labels, dist_method, frames=frames)
     logger.log(f'truth_k: {truth_k}, truth_sse: {truth_sse}', prefix='Cluster')
 
-    # [25, 50, 75, 100, 125, 150, 175, 200]
-    # [357, 179, 90, 46, 68, 79, 84, 81, 80]
-    # for res_k in [357, 179, 90, 46, 68, 79, 84, 81, 80]:
-    #     cluster_labels = kmeans(res_k, features, labels, logger, init_method, dist_method, max_iters, False, frames=frames) 
-        # cluster_labels = kmeans(res_k, features, labels, logger, init_method, dist_method, max_iters, True, frames=frames) 
-        # np.save(output_dir + f'/{features_cache_file}_{res_k}.npy', cluster_labels)
-
-    # 3. log_means
-    # logger.log(f'step3: runing log_means', prefix='Cluster')
     try:
         with open(f'/home/cjx/ufsar/cache/{dataset}/cluster/k.json', 'r') as f:
             k_map = json.load(f)
@@ -527,7 +450,5 @@ def run_cluster(
     with open(f'/home/cjx/ufsar/cache/{dataset}/cluster/k.json', 'w') as f:
         json.dump(k_map, f)
     
-    # 4. kmeans
-    # logger.log(f'step4: runing k_means', prefix='Cluster')
     cluster_labels = kmeans(res_k, features, labels, logger, init_method, dist_method, max_iters, True, frames=frames) 
     np.save(output_dir + f'/{features_cache_file}_{res_k}.npy', cluster_labels)
