@@ -21,13 +21,6 @@ python3 and torch1.8
 
 ## Structure
 
-- backbone: To save the trained models.
-- config: The configuration file.
-- method: The main files of the code, including the dataset and MECES-VLMA models.
-- utils: The data transforms, extract frame, and Logger.
-- vcache: captioning network, log-means, and cache.
-- main.py: Program entrance.
-
 - backbone: The network architecture of our approach..
 - config: The configuration file.
 - method: The VLMA method.
