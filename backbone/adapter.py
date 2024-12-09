@@ -91,7 +91,7 @@ class AdapterCLIPViT(nn.Module):
         x = x + self.origin_model.positional_embedding.to(x.dtype)
         x = self.origin_model.ln_pre(x) 
 
-        x = x.permute(1, 0, 2)  # NLD -> LND [197, N, 768]
+        x = x.permute(1, 0, 2)  # [197, N, 768]
         for i, resblock in enumerate(self.origin_model.transformer.resblocks):
             # MSA
             x = x + resblock.attention(resblock.ln_1(x))
@@ -101,7 +101,7 @@ class AdapterCLIPViT(nn.Module):
             # x = x + self.mlp_adapters[i](resblock.mlp(resblock.ln_2(x)))
             # Block
             x = self.block_adapters[i](x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = x.permute(1, 0, 2) 
         
         x = self.origin_model.ln_post(x[:, 0, :])
         x = x @ self.origin_model.proj
@@ -125,9 +125,9 @@ class TextCLIP(nn.Module):
         text = self.tokenizer(text).cuda()
         x = self.token_embedding(text)  # [batch_size, n_ctx, d_model]
         x = x + self.positional_embedding
-        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = x.permute(1, 0, 2)
         x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = x.permute(1, 0, 2) 
         x = self.ln_final(x)
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
@@ -175,7 +175,7 @@ class AdapterText(nn.Module):
             # x = x + self.mlp_adapters[i](resblock.mlp(resblock.ln_2(x)))
             # Block
             x = self.block_adapters[i](x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = x.permute(1, 0, 2)
         
         x = self.ln_final(x)
         x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
